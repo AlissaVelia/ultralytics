@@ -13,6 +13,9 @@ __all__ = (
     "LightConv",
     "DWConv",
     "DWConvTranspose2d",
+    "BiFPN_Concat3",
+    "BiFPN_Concat2",
+    "HSFPN",
     "ConvTranspose",
     "Focus",
     "GhostConv",
@@ -24,6 +27,125 @@ __all__ = (
     "Index",
 )
 
+class HSFPN(nn.Module):
+    """
+    Hybrid Spatial Feature Pyramid Network attention module.
+
+    Applies channel attention through a combination of average and max pooling
+    to enhance relevant features in the input tensor.
+
+    Attributes:
+        avg_pool (nn.AdaptiveAvgPool2d): Global average pooling layer.
+        max_pool (nn.AdaptiveMaxPool2d): Global max pooling layer.
+        conv1 (nn.Conv2d): First convolution layer for dimensionality reduction.
+        relu (nn.ReLU): ReLU activation function.
+        conv2 (nn.Conv2d): Second convolution layer for channel restoration.
+        flag (bool): Whether to apply residual connection.
+        sigmoid (nn.Sigmoid): Sigmoid activation for attention weights.
+    """
+    def __init__(self, in_planes, ratio = 4, flag=True):
+        super(HSFPN, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+
+        self.conv1 = nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False)
+        self.relu = nn.ReLU()
+        self.conv2 = nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False)
+        self.flag = flag
+        self.sigmoid = nn.Sigmoid()
+
+        nn.init.xavier_uniform_(self.conv1.weight)
+        nn.init.xavier_uniform_(self.conv2.weight)
+
+    def forward(self, x):
+        """
+        Apply hybrid spatial attention to input tensor.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            (torch.Tensor): Attended output tensor.
+        """
+        avg_out = self.conv2(self.relu(self.conv1(self.avg_pool(x))))
+        max_out = self.conv2(self.relu(self.conv1(self.max_pool(x))))
+        out = avg_out + max_out
+        return self.sigmoid(out) * x if self.flag else self.sigmoid(out)
+
+class BiFPN_Concat2(nn.Module):
+    """
+    Bidirectional Feature Pyramid Network concatenation for two inputs.
+    
+    Applies learnable weights to input tensors before concatenation to adaptively
+    adjust the importance of each feature path.
+    
+    Attributes:
+        d (int): Dimension along which to concatenate tensors.
+        w (nn.Parameter): Learnable weights for the two input tensors.
+        epsilon (float): Small value to prevent division by zero.
+        
+    References:
+        https://arxiv.org/abs/1911.09070 - EfficientDet: Scalable and Efficient Object Detection
+    """
+    def __init__(self, dimension=1):
+        super(BiFPN_Concat2, self).__init__()
+        self.d = dimension
+        self.w = nn.Parameter(torch.ones(2, dtype=torch.float32), requires_grad=True)
+        self.epsilon = 0.0001
+
+    def forward(self, x):
+        """
+        Apply weighted fusion to input tensors and concatenate them.
+        
+        Args:
+            x (List[torch.Tensor]): List of two input tensors.
+            
+        Returns:
+            (torch.Tensor): Concatenated tensor with applied weights.
+        """
+        w = self.w
+        weight = w / (torch.sum(w, dim=0) + self.epsilon)
+        # Fast normalized fusion
+        x = [weight[0] * x[0], weight[1] * x[1]]
+        return torch.cat(x, self.d)
+
+
+class BiFPN_Concat3(nn.Module):
+    """
+    Bidirectional Feature Pyramid Network concatenation for three inputs.
+    
+    Applies learnable weights to three input tensors before concatenation to adaptively
+    adjust the importance of each feature path.
+    
+    Attributes:
+        d (int): Dimension along which to concatenate tensors.
+        w (nn.Parameter): Learnable weights for the three input tensors.
+        epsilon (float): Small value to prevent division by zero.
+        
+    References:
+        https://arxiv.org/abs/1911.09070 - EfficientDet: Scalable and Efficient Object Detection
+    """
+    def __init__(self, dimension=1):
+        super(BiFPN_Concat3, self).__init__()
+        self.d = dimension
+        self.w = nn.Parameter(torch.ones(3, dtype=torch.float32), requires_grad=True)
+        self.epsilon = 0.0001
+
+    def forward(self, x):
+        """
+        Apply weighted fusion to input tensors and concatenate them.
+        
+        Args:
+            x (List[torch.Tensor]): List of three input tensors.
+            
+        Returns:
+            (torch.Tensor): Concatenated tensor with applied weights.
+        """
+        w = self.w
+        weight = w / (torch.sum(w, dim=0) + self.epsilon)
+        # Fast normalized fusion
+        x = [weight[0] * x[0], weight[1] * x[1], weight[2] * x[2]]
+        return torch.cat(x, self.d)
 
 def autopad(k, p=None, d=1):  # kernel, padding, dilation
     """Pad to 'same' shape outputs."""

@@ -69,6 +69,9 @@ from .conv import (
     ConvTranspose,
     DWConv,
     DWConvTranspose2d,
+    BiFPN_Concat3,
+    BiFPN_Concat2,
+    HSFPN,
     Focus,
     GhostConv,
     Index,
@@ -179,4 +182,7 @@ __all__ = (
     "TorchVision",
     "Index",
     "A2C2f",
+    "BiFPN_Concat2",
+    "BiFPN_Concat3",
+    "HSFPN",
 )

@@ -69,6 +69,7 @@ from ultralytics.nn.modules import (
     YOLOESegment,
     v10Detect,
 )
+from ultralytics.nn.modules.conv import BiFPN_Concat2, BiFPN_Concat3, HSFPN
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
 from ultralytics.utils.loss import (
@@ -1426,6 +1427,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             SCDown,
             C2fCIB,
             A2C2f,
+            HSFPN,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1495,6 +1497,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         elif m is torch.nn.BatchNorm2d:
             args = [ch[f]]
         elif m is Concat:
+            c2 = sum(ch[x] for x in f)
+        elif m in [Concat, BiFPN_Concat2, BiFPN_Concat3]:
             c2 = sum(ch[x] for x in f)
         elif m in frozenset(
             {Detect, WorldDetect, YOLOEDetect, Segment, YOLOESegment, Pose, OBB, ImagePoolingAttn, v10Detect}
